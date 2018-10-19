@@ -1,0 +1,74 @@
+kubernetes 入门
+
+目录 kubernetes 入门Pod 简析Pod 设计原理容器设计模式(sidecar模式)总结容器与虚拟机的对比swarm 与 kubernetes的区别
+
+Pod 简析
+
+如下所示为 Pod 的组成示意图，每个 Pod 都有且仅有一个根容器 Pause，每个 Pod 还包含一个或者多个紧密相关的用户业务容器。
+
+
+
+(1) 以 Pause 容器的状态代表 Pod 中 整个容器组的状态；
+
+(2) Pod 容器中的业务容器共享 Pause 容器的 IP，共享 Pause 容器挂接的 Volume；
+
+(3) 默认情况下，业务容器共享 Pause 容器所在进程除 Pid 之外的所有命名空间；
+
+(4) Pod 也分为 普通的Pod 和 静态 Pod(Static Pod)；
+
+    a. 普通 Pod 一旦创建，就会被放入到 etcd 中存储
+    b. 静态 Pod 存放在 Node 上的 某一个具体文件中，并且只在该 Node 上运行
+
+(5) Pod 是 Kubernetes 中的原子调度单位，即 Kubernetes 是按照 Pod 而非容器的资源进行需求进行计算的；
+
+(6) 只有具有超亲密关系容器才有可能同属于一个 Pod，具有超亲密关系容器的典型特征包括但不限于；
+
+    a. 互相之间会发生直接的文件交换
+    b. 使用 localhost 或者 socket 文件进行本地通信
+    c. 会发生非常频繁的远程调用
+    d. 需要共享某些 Linux Namepace
+
+Pod 与 Pod 中的容器有点类似于 Linux 系统上进程组与进程的关系。
+
+Pod 设计原理
+
+Pod 在 kubernetes 中只是一个逻辑上的概念；kubernetes 真正处理的还是宿主机操作系统上 Linux 容器的 Namespace 和 Cgroups ，而并不存在一个所谓的 Pod 的边界或者隔离环境。
+
+    a. Pod，其实就是一组共享了某些资源的容器；Pod 里所有的容器，共享的是同一个 Network Namespace，并且可以声明共享同一个 Volume
+    b. 实践中发现，kubernetes+cri-containerd+kata时，Pod里的所有容器共享了除 Pid Namespace 之外的所有 Namespace
+    c. 业务容器共享 Pause 容器的 Namespace，Pause 容器是 Pod 中第一个被创建的容器，其他容器通过 Join Namespace 的方式，与 Pause 容器关联在一起
+
+通过如上所述，可以知道 Pod 中容器：
+
+    a. 可以直接使用 localhost 进行通信
+    b. 看到的网络设备和 Pause 中看到的完全一样
+    c. 一个 Pod 只有一个 IP 地址，也就是这个 Pod 的 Network Namespace 对应的 IP 地址
+    d. Pod 的声明周期 Pause 容器的生命周期一致
+
+容器设计模式(sidecar模式)
+
+Pod 这种超亲密容器的设计思想，实际上是希望当用户想在一个容器里跑多个功能并不相关的应用时，应该优先考虑它们是不是更应该被描述成一个 Pod 里的多个容器。
+
+    a. sidecar 模式指的就是我们可以在一个 Pod 中，启动一个辅助容器，来完成一些独立于主容器(主进程)之外的工作
+
+关于容器设计模式的例子参考：
+
+[]: https://time.geekbang.org/column/article/40092
+
+关于容器设计模式的论文参考：
+
+[]: https://www.usenix.org/conference/hotcloud16/workshop-program/presentation/burns
+
+总结
+
+容器与虚拟机的对比
+
+    a. 无论是从具体的原理，还是从使用方法、特性、功能等方面，容器与虚拟机几乎没有任何相似的地方；也不存在一种普遍的方法，能够把虚拟机的应用无缝迁移到容器中。因为，容器不能像虚拟机那样，完全模拟物理机环境中的部署方法
+    b. 运行在虚拟机上的进程，都是被 systemd 或者 supervisord 之下的一组进程，而不是单个进程。这和物理机上运行的进程并没有本质区别。所以从物理机往虚拟机迁移迁移应用，并不困难
+
+swarm 与 kubernetes的区别
+
+    a. 本质上，swarm 以单容器方式工作；而 kubernetes 的最小调度单位是 Pod，而 Pod 中是可以运行多个容器的。这也是 swarm 相比 kubernetes 无法成长起来的原因
+    b. Pod，在 kubernetes 中实际上是在扮演传统基础设施里“虚拟机”的角色；而容器，则扮演这个“虚拟机”里进程的角色。
+
+
